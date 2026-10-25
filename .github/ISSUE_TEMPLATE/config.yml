@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 阅读文档 / Read the docs
+    url: https://github.com/1067561191/miui-usbdebug-skip-sim-limit/blob/main/README.zh-CN.md
+    about: 安装、验证、疑难排查与已知限制（含「不要点那个开关」的说明）
+  - name: 排查指南 / Troubleshooting
+    url: https://github.com/1067561191/miui-usbdebug-skip-sim-limit/blob/main/README.zh-CN.md#疑难排查
+    about: 提交 issue 前请先按此表自查
+  - name: 兼容性说明 / Compatibility notes
+    url: https://github.com/1067561191/miui-usbdebug-skip-sim-limit/blob/main/AGENTS.md
+    about: 平台差异集中点、构建与验证约定

@@ -1,0 +1,64 @@
+---
+name: 功能建议 / Feature request
+description: 建议新增功能或改进
+title: '[Feature] '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请确认这个建议**不属于**以下已被明确拒绝的方向
+        （理由见 [README](https://github.com/1067561191/miui-usbdebug-skip-sim-limit/blob/main/README.zh-CN.md) 与 [AGENTS.md](https://github.com/1067561191/miui-usbdebug-skip-sim-limit/blob/main/AGENTS.md)）：
+
+        - ❌ **Hook `com.android.settings` 绕过那个弹窗向导** —— 收益纯观感，
+          代价是多一个 LSPosed 依赖并绑定特定 `Settings.apk` 版本
+        - ❌ **把权限授予范围从 `uid=2000` 扩大到其它 App** —— 明确不做
+        - ❌ **用 system 文件替换 / patch `services.jar`** —— 会破坏 AVB/dm-verity 可回滚性
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的问题
+      description: 描述场景与痛点，不要直接跳到解决方案
+      placeholder: 每次我误点了开发者选项那个开关，就必须重启才能恢复……
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+      description: 你希望它怎么工作？
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+      description: 有没有别的做法？为什么不行？
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影响面评估
+      description: |
+        请尽量说明：
+        - 是否会扩大权限范围（当前仅 `uid=2000`）
+        - 是否会引入新的依赖（如 LSPosed）
+        - 是否依赖特定 ROM 版本
+    validations:
+      required: true
+
+  - type: dropdown
+    id: will-pr
+    attributes:
+      label: 是否愿意提交 PR
+      options:
+        - 愿意，我可以实现
+        - 愿意协助测试
+        - 只是建议，无法参与
+    validations:
+      required: true

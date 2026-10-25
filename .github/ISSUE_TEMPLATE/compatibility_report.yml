@@ -1,0 +1,128 @@
+---
+name: 兼容性报告 / Compatibility report
+description: 在其它 ROM / Android 版本上测试本模块的结果（成功或失败）
+title: '[Compat] '
+labels: ['compatibility']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        本模块目前只在 **Android 13 / MIUI V816 / Redmi M2012K11AC** 上验证过。
+        其它平台的结果非常有价值，无论成功还是失败都欢迎提交。
+
+        ### 平台差异集中在这三点
+
+        适配时优先检查这三处，报告里请尽量都覆盖：
+
+        1. `persist.security.adbinput` 是否仍是同一属性名
+        2. `cache_key.package_info` 是否仍是权限缓存的失效键
+        3. 对应 SELinux 域是否仍允许 `system_server` 写上述属性
+
+  - type: dropdown
+    id: result
+    attributes:
+      label: 测试结果
+      options:
+        - 完全可用（开机后 adb input 直接生效）
+        - 部分可用（某些命令可用，某些不行）
+        - 不可用（仍报 SecurityException）
+        - 导致开机异常 / 系统不稳定
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备型号
+      description: '`adb shell getprop ro.product.model`'
+      placeholder: M2012K11AC (alioth)
+    validations:
+      required: true
+
+  - type: input
+    id: rom
+    attributes:
+      label: ROM / 系统版本
+      description: |
+        `adb shell "getprop ro.build.version.release; getprop ro.miui.ui.version.name; getprop ro.mi.os.version.name"`
+      placeholder: Android 14 / OS2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: abi
+    attributes:
+      label: ABI
+      options:
+        - arm64-v8a
+        - armeabi-v7a
+        - x86
+        - x86_64
+    validations:
+      required: true
+
+  - type: input
+    id: magisk
+    attributes:
+      label: Magisk 版本
+      description: '`adb shell su -c "magisk -c"`'
+      placeholder: '30.7:MAGISK:R'
+    validations:
+      required: true
+
+  - type: textarea
+    id: prop-names
+    attributes:
+      label: 属性名核查结果
+      description: |
+        请贴出下面命令的输出：
+        ```bash
+        # 1. 目标属性是否存在
+        adb shell getprop persist.security.adbinput
+
+        # 2. 权限缓存键是否存在
+        adb shell getprop cache_key.package_info
+
+        # 3. 查找相关 SELinux 上下文
+        adb shell su -c "grep -rE 'persist.security|cache_key' /system/etc/selinux/ /system_ext/etc/selinux/ 2>/dev/null"
+        ```
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 模块日志
+      description: |
+        ```bash
+        adb shell su -c "logcat -d -s MiuiAdbInputBypass:*"
+        ```
+        特别关注是否出现 `setprop ... failed rc=`（说明 SELinux 拒绝）。
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: verify
+    attributes:
+      label: 功能验证结果
+      description: |
+        逐条执行并记录结果：
+        ```bash
+        adb shell input tap 300 1200 ; echo "tap=$?"
+        adb shell input keyevent KEYCODE_HOME ; echo "key=$?"
+        adb shell settings put global adb_enabled 1 ; echo "settings=$?"
+        adb shell pm list packages >/dev/null ; echo "pm=$?"
+        ```
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 其它观察
+      description: 例如厂商 ROM 的差异、额外需要的 prop、需要改的真实机制等
+    validations:
+      required: false

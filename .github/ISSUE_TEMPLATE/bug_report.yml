@@ -1,0 +1,156 @@
+---
+name: Bug 报告 / Bug report
+description: 模块不生效、注入报错、开机异常等问题
+title: '[Bug] '
+labels: ['bug', 'needs-triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请**先完成下面两项**，否则很难定位问题：
+
+        1. 阅读 [README 的「疑难排查」](https://github.com/1067561191/miui-usbdebug-skip-sim-limit/blob/main/README.zh-CN.md#疑难排查)
+        2. 确认模块在 system_server 里真的执行了：
+           ```bash
+           adb shell su -c "logcat -d -s MiuiAdbInputBypass:*"
+           ```
+
+        > 注意：**手动点击**开发者选项里「USB调试（安全设置）」那个开关会让属性被写回 0，
+        > 这是已知识行为，不是 bug。见 README「重要注意事项」。
+
+  - type: checkboxes
+    id: prereq
+    attributes:
+      label: 前置确认
+      options:
+        - label: 我已阅读 README 的疑难排查章节
+          required: true
+        - label: 我已确认 Magisk 中 **Zygisk 已开启**
+          required: true
+        - label: 我已尝试重启设备后重新测试
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述
+      description: 具体现象是什么？期望的行为是什么？
+      placeholder: |
+        现象：开机后执行 adb shell input tap 仍报 SecurityException
+        期望：应当成功注入点击事件
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 尽量给出可直接粘贴的命令
+      value: |
+        1. 安装模块并重启
+        2. 执行：
+           ```bash
+           adb shell getprop persist.security.adbinput
+           adb shell input tap 300 1200
+           ```
+        3. 结果：
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备型号
+      description: 可用 `adb shell getprop ro.product.model` 获取
+      placeholder: M2012K11AC (alioth)
+    validations:
+      required: true
+
+  - type: input
+    id: rom
+    attributes:
+      label: ROM / 系统版本
+      description: |
+        可用下面命令获取，请把结果贴进来：
+        `adb shell "getprop ro.build.version.release; getprop ro.miui.ui.version.name; getprop ro.mi.os.version.name"`
+      placeholder: Android 13 / MIUI V816 / OS1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: abi
+    attributes:
+      label: ABI
+      description: '`adb shell getprop ro.product.cpu.abi`'
+      options:
+        - arm64-v8a
+        - armeabi-v7a
+        - x86
+        - x86_64
+        - 不确定
+    validations:
+      required: true
+
+  - type: input
+    id: magisk
+    attributes:
+      label: Magisk 版本
+      description: '`adb shell su -c "magisk -c"`'
+      placeholder: '30.7:MAGISK:R'
+    validations:
+      required: true
+
+  - type: input
+    id: module-version
+    attributes:
+      label: 模块版本
+      description: Magisk 模块卡片上显示的版本，或 Release tag
+      placeholder: v1.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 模块日志
+      description: |
+        请贴出下面命令的**完整输出**：
+        ```bash
+        adb shell su -c "logcat -d -s MiuiAdbInputBypass:*"
+        ```
+        如果完全没有输出，也请明确写「无输出」。
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: prop-state
+    attributes:
+      label: 属性状态
+      description: |
+        请贴出：
+        ```bash
+        adb shell getprop persist.security.adbinput
+        adb shell getprop cache_key.package_info
+        adb shell getprop ro.dalvik.vm.native.bridge
+        ```
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: 报错信息（如有）
+      description: SecurityException、tombstone、`setprop ... failed rc=` 等
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 是否同时装了其他 Magisk/LSPosed 模块？是否改过系统文件？
+    validations:
+      required: false

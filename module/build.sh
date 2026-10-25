@@ -11,21 +11,36 @@ cd "$(dirname "$0")"
 
 MODULE_ID="miui_adbinput_bypass"
 MODULE_NAME="MIUI ADB Input Bypass"
-MODULE_VERSION="v1.0.0"
-MODULE_VERSION_CODE=1
+
+# 版本号可由环境变量覆盖（CI 在打 tag 时注入），默认值用于本地构建
+MODULE_VERSION="${MODULE_VERSION:-v1.0.0}"
+MODULE_VERSION_CODE="${MODULE_VERSION_CODE:-1}"
 
 # ---------- 定位 NDK ----------
+# 优先级: $NDK > $ANDROID_HOME/ndk/<latest> > 报错
 if [[ -z "${NDK:-}" ]]; then
     SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
     if [[ -z "$SDK" ]]; then
         echo "错误: 未设置 ANDROID_HOME/NDK，且未找到 Android SDK" >&2
         exit 1
     fi
-    # 转成 Windows 风格路径（NDK 的 clang 是 Windows 原生程序）
-    SDK_WIN=$(cygpath -m "$SDK" 2>/dev/null || echo "$SDK")
-    NDK="$SDK_WIN/ndk/$(ls "$SDK/ndk" | sort -V | tail -1)"
+    if [[ ! -d "$SDK/ndk" ]]; then
+        echo "错误: $SDK/ndk 不存在，请用 sdkmanager 安装 NDK" >&2
+        exit 1
+    fi
+    NDK="$SDK/ndk/$(ls "$SDK/ndk" | sort -V | tail -1)"
 fi
-NDK=$(cygpath -m "$NDK")
+
+# Windows 下 NDK 的 clang 是原生程序，需要 Windows 风格绝对路径；
+# Linux/macOS 无 cygpath，保持原路径（此处曾经因缺少 fallback 导致 CI 失败）。
+if command -v cygpath >/dev/null 2>&1; then
+    NDK=$(cygpath -m "$NDK")
+fi
+
+if [[ ! -d "$NDK" ]]; then
+    echo "错误: NDK 目录不存在: $NDK" >&2
+    exit 1
+fi
 echo "NDK: $NDK"
 
 HOST_TAG="windows-x86_64"
@@ -146,3 +161,11 @@ echo
 echo "完成: $ZIP_OUT"
 ls -la "$ZIP_OUT"
 unzip -l "$ZIP_OUT" | tail -15
+
+echo
+# 输出 SHA256，便于 CI 写入 Release 说明
+if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$ZIP_OUT" | awk '{print "SHA256=" $1}'
+else
+    shasum -a 256 "$ZIP_OUT" | awk '{print "SHA256=" $1}'
+fi
