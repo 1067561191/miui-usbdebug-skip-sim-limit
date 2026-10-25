@@ -13,9 +13,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 env:
   # NDK 版本：与本项目开发环境一致（r28c / 28.2.13676358）。
   # 升级时请同步更新本地与 AGENTS.md 中的记录。
@@ -23,20 +20,25 @@ env:
   MODULE_ID: miui_adbinput_bypass
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # 构建 + 校验：只读权限。PR 与普通推送走这里。
+  # ---------------------------------------------------------------------------
   build:
     name: Build module
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # 用 sdkmanager 只拉取 NDK，避免下载完整的 700MB+ 离线包
       - name: Set up JDK
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
+      # 用 sdkmanager 只拉取 NDK，避免下载完整的 700MB+ 离线包
       - name: Install Android NDK
         run: |
           set -euo pipefail
@@ -75,10 +77,10 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            # tag 形如 v1.0.0 -> 直接用
+            # tag 形如 v1.0.0 -> 直接使用，保证 zip 名、module.prop、Release 三者一致
             echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           else
-            # 非 tag 构建：使用 0.0.0-g<短sha>，并给一个足够大的 versionCode
+            # 非 tag 构建：使用 0.0.0-g<短sha>
             echo "version=v0.0.0-g${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           fi
           # versionCode：用提交时间戳前 9 位，保证单调递增
@@ -98,25 +100,26 @@ jobs:
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "ZIP_NAME=$(basename "$ZIP")" >> "$GITHUB_ENV"
 
-      # 产物占位检查：确保 4 个 ABI 都在，且入口符号已导出
+      # 产物校验：确保 4 个 ABI 都在、入口符号已导出、无残留 C++ ABI 未解析符号
       - name: Verify artifacts
         run: |
           set -euo pipefail
           echo "== zip 内容 =="
           unzip -l "$ZIP"
 
+          READELF="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
           for abi in arm64-v8a armeabi-v7a x86 x86_64; do
             SO="module/build/$abi/$abi.so"
             test -f "$SO" || { echo "缺少 $abi 产物" >&2; exit 1; }
+
             # zygisk_module_entry 必须导出，否则 Magisk 无法加载
-            if ! "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
-                   --dyn-syms "$SO" | grep -q zygisk_module_entry; then
+            if ! "$READELF" --dyn-syms "$SO" | grep -q zygisk_module_entry; then
               echo "$abi 未导出 zygisk_module_entry" >&2
               exit 1
             fi
-            # 不允许残留 C++ ABI 未解析符号
-            if "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
-                   --dyn-syms "$SO" | grep -E 'UND.*(__cxa_guard|cxxabi)'; then
+
+            # 不允许残留 C++ ABI 未解析符号（缺 abi_stub.cpp 时会触发）
+            if "$READELF" --dyn-syms "$SO" | grep -E 'UND.*(__cxa_guard|cxxabi)'; then
               echo "$abi 仍有未解析的 C++ ABI 符号" >&2
               exit 1
             fi
@@ -127,20 +130,51 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.MODULE_ID }}-${{ steps.ver.outputs.version }}
-          path: ${{ env.ZIP }}
+          path: |
+            ${{ env.ZIP }}
+            /tmp/build.log
           if-no-files-found: error
           retention-days: 30
 
-      # ---------- tag 时自动发布 Release ----------
-      - name: Generate release notes
-        if: github.ref_type == 'tag'
+  # ---------------------------------------------------------------------------
+  # 发布：仅在打 tag 时执行，需要 contents: write。
+  # 拆成独立 job 是为了让 build job 保持只读（PR 场景最安全）。
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.MODULE_ID }}-${{ github.ref_name }}
+          path: dist
+
+      - name: Collect files
         run: |
           set -euo pipefail
-          SHA=$(sed -n 's/^SHA256=//p' /tmp/build.log | head -1 || true)
+          echo "== dist =="
+          ls -laR dist
+          ZIP=$(find dist -maxdepth 1 -name '*.zip' | head -1)
+          test -n "$ZIP" || { echo "artifact 中没有 zip" >&2; exit 1; }
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "ZIP_NAME=$(basename "$ZIP")" >> "$GITHUB_ENV"
+
+      - name: Generate release notes
+        run: |
+          set -euo pipefail
+          SHA=""
+          if [ -f dist/build.log ]; then
+            SHA=$(sed -n 's/^SHA256=//p' dist/build.log | head -1 || true)
+          fi
           {
             echo "## ${GITHUB_REF_NAME}"
             echo
-            echo "自动构建产物（${{ github.sha }}），包含 4 个 ABI："
+            echo "自动构建产物（\`${GITHUB_SHA::7}\`），包含 4 个 ABI："
             echo '`arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`'
             echo
             echo '### 安装'
@@ -150,6 +184,9 @@ jobs:
             echo '3. 重启'
             echo
             echo '前提：Magisk 24.0+ 且已开启 Zygisk。详见 [README](README.zh-CN.md)。'
+            echo
+            echo '> ⚠️ 安装后**不要**手动点开发者选项里的「USB调试（安全设置）」开关，'
+            echo '> 它会把属性写回 0。误点后重启即可恢复。'
             echo
             if [ -n "$SHA" ]; then
               echo '### 校验值'
@@ -162,7 +199,6 @@ jobs:
           cat /tmp/release-notes.md
 
       - name: Publish release
-        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.ZIP }}
