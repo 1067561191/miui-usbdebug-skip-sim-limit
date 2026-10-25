@@ -1,0 +1,10 @@
+*.sh      text eol=lf
+*.cpp     text eol=lf
+*.hpp     text eol=lf
+*.md      text eol=lf
+*.prop    text eol=lf
+LICENSE   text eol=lf
+update-binary    text eol=lf
+updater-script   text eol=lf
+*.so      binary
+*.zip     binary
