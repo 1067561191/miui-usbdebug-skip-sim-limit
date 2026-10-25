@@ -8,3 +8,4 @@ update-binary    text eol=lf
 updater-script   text eol=lf
 *.so      binary
 *.zip     binary
+*.yml     text eol=lf
