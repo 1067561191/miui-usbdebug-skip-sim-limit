@@ -93,7 +93,8 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x module/build.sh
-          ./module/build.sh | tee /tmp/build.log
+          mkdir -p dist
+          ./module/build.sh | tee dist/build.log
 
           ZIP="module/build/${MODULE_ID}-${MODULE_VERSION}.zip"
           test -f "$ZIP" || { echo "未生成 $ZIP" >&2; exit 1; }
@@ -130,9 +131,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.MODULE_ID }}-${{ steps.ver.outputs.version }}
+          # 必须全部使用工作区相对路径，混用绝对路径会让 artifact 带上一层
+          # 完整目录树（home/runner/work/...），下游 find 就找不到文件了。
           path: |
             ${{ env.ZIP }}
-            /tmp/build.log
+            dist/build.log
           if-no-files-found: error
           retention-days: 30
 
@@ -159,17 +162,20 @@ jobs:
           set -euo pipefail
           echo "== dist =="
           ls -laR dist
-          ZIP=$(find dist -maxdepth 1 -name '*.zip' | head -1)
+          # artifact 会按上传时的相对路径展开：zip 位于 dist/ 根，build.log 同级
+          ZIP=$(find . -name '*.zip' -type f | head -1)
           test -n "$ZIP" || { echo "artifact 中没有 zip" >&2; exit 1; }
+          LOG=$(find . -name 'build.log' -type f | head -1 || true)
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "ZIP_NAME=$(basename "$ZIP")" >> "$GITHUB_ENV"
+          echo "LOG=${LOG:-}" >> "$GITHUB_ENV"
 
       - name: Generate release notes
         run: |
           set -euo pipefail
           SHA=""
-          if [ -f dist/build.log ]; then
-            SHA=$(sed -n 's/^SHA256=//p' dist/build.log | head -1 || true)
+          if [ -n "${LOG:-}" ] && [ -f "$LOG" ]; then
+            SHA=$(sed -n 's/^SHA256=//p' "$LOG" | head -1 || true)
           fi
           {
             echo "## ${GITHUB_REF_NAME}"
@@ -195,13 +201,13 @@ jobs:
               echo "SHA256: $SHA"
               echo '```'
             fi
-          } > /tmp/release-notes.md
-          cat /tmp/release-notes.md
+          } > dist/release-notes.md
+          cat dist/release-notes.md
 
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.ZIP }}
-          body_path: /tmp/release-notes.md
+          body_path: dist/release-notes.md
           generate_release_notes: true
           fail_on_unmatched_files: true
